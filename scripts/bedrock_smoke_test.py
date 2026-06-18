@@ -47,8 +47,6 @@ def main():
     print(f"Input Tokens : {usage.get('inputTokens')}")
     print(f"Output Tokens: {usage.get('outputTokens')}")
     print(f"Total Tokens : {usage.get('totalTokens')}")
-    print(f"Stop Reason  : {response.get('stopReason')}")
-
 
 if __name__ == "__main__":
     try:
