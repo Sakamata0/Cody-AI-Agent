@@ -1,13 +1,21 @@
 """
 Seed script to create and populate the sample company SQLite database.
 
-Run this once to generate data/company.db with fake company data.
+Uses Faker to generate realistic fake data at scale.
+Run this once to generate data/company.db.
 """
 
 import sqlite3
 import os
+import random
+
+from faker import Faker
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "company.db")
+
+fake = Faker()
+Faker.seed(42)
+random.seed(42)
 
 
 def create_database():
@@ -30,8 +38,10 @@ def create_database():
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             department_id INTEGER NOT NULL,
+            position TEXT NOT NULL,
             salary REAL NOT NULL,
             hire_date TEXT NOT NULL,
+            email TEXT NOT NULL,
             FOREIGN KEY (department_id) REFERENCES departments(id)
         );
 
@@ -40,48 +50,79 @@ def create_database():
             name TEXT NOT NULL,
             department_id INTEGER NOT NULL,
             status TEXT NOT NULL,
+            start_date TEXT NOT NULL,
             deadline TEXT NOT NULL,
+            budget REAL NOT NULL,
             FOREIGN KEY (department_id) REFERENCES departments(id)
         );
     """)
 
-    # Seed departments
+    # Seed 10 departments
     departments = [
-        (1, "Engineering", 500000),
-        (2, "Marketing", 200000),
-        (3, "Sales", 300000),
-        (4, "Human Resources", 150000),
-        (5, "Finance", 250000),
+        (1, "Engineering", 1200000),
+        (2, "Marketing", 450000),
+        (3, "Sales", 600000),
+        (4, "Human Resources", 300000),
+        (5, "Finance", 500000),
+        (6, "Product", 700000),
+        (7, "Customer Support", 350000),
+        (8, "Legal", 400000),
+        (9, "Operations", 550000),
+        (10, "Research & Development", 900000),
     ]
     cursor.executemany("INSERT INTO departments VALUES (?, ?, ?)", departments)
 
-    # Seed employees
-    employees = [
-        (1, "Alice Martin", 1, 75000, "2022-03-15"),
-        (2, "Bob Johnson", 1, 82000, "2021-07-01"),
-        (3, "Charlie Brown", 2, 60000, "2023-01-10"),
-        (4, "Diana Ross", 3, 70000, "2022-06-20"),
-        (5, "Eve Wilson", 1, 90000, "2020-11-05"),
-        (6, "Frank Miller", 4, 55000, "2023-04-12"),
-        (7, "Grace Lee", 2, 65000, "2022-09-30"),
-        (8, "Henry Davis", 3, 72000, "2021-12-01"),
-        (9, "Iris Chen", 5, 78000, "2022-02-14"),
-        (10, "Jack Taylor", 1, 85000, "2021-05-22"),
-        (11, "Karen White", 5, 80000, "2020-08-17"),
-        (12, "Liam Harris", 3, 68000, "2023-03-01"),
+    # Seed 2000 employees
+    positions = [
+        "Junior Developer", "Senior Developer", "Lead Developer", "Architect",
+        "Analyst", "Senior Analyst", "Manager", "Director", "VP",
+        "Coordinator", "Specialist", "Consultant", "Intern", "Team Lead",
     ]
-    cursor.executemany("INSERT INTO employees VALUES (?, ?, ?, ?, ?)", employees)
 
-    # Seed projects
-    projects = [
-        (1, "Cloud Migration", 1, "in_progress", "2025-09-30"),
-        (2, "Brand Redesign", 2, "completed", "2025-03-15"),
-        (3, "Q3 Sales Campaign", 3, "in_progress", "2025-08-31"),
-        (4, "Employee Portal", 4, "planned", "2025-12-01"),
-        (5, "AI Integration", 1, "in_progress", "2025-10-15"),
-        (6, "Budget Automation", 5, "planned", "2025-11-30"),
+    employees = []
+    for i in range(1, 2001):
+        dept_id = random.randint(1, 10)
+        position = random.choice(positions)
+        salary = random.randint(35000, 150000)
+        hire_date = fake.date_between(start_date="-5y", end_date="today").isoformat()
+        email = fake.email()
+        name = fake.name()
+        employees.append((i, name, dept_id, position, salary, hire_date, email))
+
+    cursor.executemany("INSERT INTO employees VALUES (?, ?, ?, ?, ?, ?, ?)", employees)
+
+    # Seed 50 projects
+    statuses = ["planned", "in_progress", "completed", "on_hold", "cancelled"]
+    project_names = [
+        "Cloud Migration", "API Redesign", "Mobile App v2", "Data Pipeline",
+        "Security Audit", "Brand Refresh", "CRM Integration", "AI Chatbot",
+        "Performance Optimization", "Infrastructure Upgrade", "User Research",
+        "Payment Gateway", "Analytics Dashboard", "DevOps Pipeline",
+        "Customer Portal", "Inventory System", "Email Campaign", "SEO Overhaul",
+        "Compliance Review", "Training Program", "Office Expansion",
+        "Vendor Management", "Quality Assurance", "Knowledge Base",
+        "Recruitment Drive", "Budget Planning", "Market Expansion",
+        "Product Launch", "Partnership Program", "Internal Tooling",
+        "Disaster Recovery", "Green Initiative", "Accessibility Audit",
+        "Localization", "Supply Chain Optimization", "Loyalty Program",
+        "Social Media Strategy", "Onboarding Revamp", "Tech Debt Reduction",
+        "Customer Feedback System", "Real-time Reporting", "Microservices Split",
+        "Load Testing", "Documentation Overhaul", "Mentorship Program",
+        "Open Source Contribution", "Hackathon Planning", "Cost Reduction",
+        "Feature Flagging", "AB Testing Platform",
     ]
-    cursor.executemany("INSERT INTO projects VALUES (?, ?, ?, ?, ?)", projects)
+
+    projects = []
+    for i in range(1, 51):
+        dept_id = random.randint(1, 10)
+        status = random.choice(statuses)
+        start_date = fake.date_between(start_date="-2y", end_date="today").isoformat()
+        deadline = fake.date_between(start_date="today", end_date="+1y").isoformat()
+        budget = random.randint(10000, 500000)
+        name = project_names[i - 1]
+        projects.append((i, name, dept_id, status, start_date, deadline, budget))
+
+    cursor.executemany("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)", projects)
 
     conn.commit()
     conn.close()
