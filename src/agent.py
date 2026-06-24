@@ -1,0 +1,152 @@
+"""
+Cody AI Agent — Core ReAct Agent with multi-tool orchestration.
+
+This module defines the central agent that combines all available tools
+and uses a ReAct (Reasoning and Acting) approach to solve complex,
+multi-step problems.
+"""
+
+import sys
+import os
+import time
+from typing import Any
+
+from dotenv import load_dotenv
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.callbacks import BaseCallbackHandler
+
+load_dotenv()
+
+# Import the LLM and all tools.
+from src.llm import chat_model
+from src.tools.web_search import web_search_tool
+from src.tools.database import sql_query_tool
+from src.tools.api import api_tools
+
+# All tools available to the agent.
+ALL_TOOLS = [web_search_tool, sql_query_tool] + api_tools
+
+# System prompt that defines Cody's behavior and reasoning approach.
+SYSTEM_PROMPT = """You are Cody, an autonomous AI agent built on AWS Bedrock.
+
+You have access to the following tools:
+- web_search: Search the web for current information and recent news.
+- sql_query: Query the company database (departments, employees, projects).
+- weather_tool: Get current weather for any city.
+- exchange_rate_tool: Convert currencies or get exchange rates.
+
+REASONING APPROACH:
+1. Analyze the user's question and identify what information is needed.
+2. If the question requires multiple steps, plan them before acting.
+3. Use tools one at a time, observe the result, then decide the next step.
+4. Chain multiple tools when needed (e.g., search web THEN convert currency).
+5. Always formulate a clear, concise final answer based on all observations.
+
+RULES:
+- Only use tools when external data is needed. Answer from knowledge when possible.
+- If a tool returns an error, try a different approach or inform the user.
+- Be concise but thorough in your final answers.
+- Show your reasoning when solving multi-step problems.
+"""
+
+
+class StepLoggingHandler(BaseCallbackHandler):
+    """Callback handler that logs each reasoning step (Thought/Action/Observation)."""
+
+    def __init__(self):
+        self.steps = []
+        self.step_count = 0
+
+    def on_agent_action(self, action: Any, **kwargs) -> None:
+        """Called when the agent decides to use a tool."""
+        self.step_count += 1
+        step = {
+            "step": self.step_count,
+            "type": "action",
+            "tool": action.tool,
+            "input": action.tool_input,
+        }
+        self.steps.append(step)
+        print(f"  [Step {self.step_count}] Action: {action.tool}({action.tool_input})")
+
+    def on_tool_end(self, output: str, **kwargs) -> None:
+        """Called when a tool returns a result."""
+        # Truncate long outputs for cleaner logs.
+        output_str = str(output)
+        display_output = output_str[:200] + "..." if len(output_str) > 200 else output_str
+        step = {
+            "step": self.step_count,
+            "type": "observation",
+            "output": output_str,
+        }
+        self.steps.append(step)
+        print(f"  [Step {self.step_count}] Observation: {display_output}")
+
+    def on_agent_finish(self, finish: Any, **kwargs) -> None:
+        """Called when the agent produces a final answer."""
+        self.step_count += 1
+        step = {
+            "step": self.step_count,
+            "type": "final_answer",
+            "output": finish.return_values.get("output", ""),
+        }
+        self.steps.append(step)
+
+
+def create_agent() -> AgentExecutor:
+    """Create and return the Cody agent executor with all tools and logging."""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        ("placeholder", "{chat_history}"),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}"),
+    ])
+
+    agent = create_tool_calling_agent(chat_model, ALL_TOOLS, prompt)
+
+    executor = AgentExecutor(
+        agent=agent,
+        tools=ALL_TOOLS,
+        verbose=False,  # We use our custom logger instead.
+        max_iterations=10,
+        handle_parsing_errors=True,
+    )
+
+    return executor
+
+
+def run_agent(query: str, chat_history: list = None) -> dict:
+    """
+    Run the agent on a query and return the result with logging.
+
+    Returns:
+        dict with keys: output, steps, latency_ms
+    """
+    if chat_history is None:
+        chat_history = []
+
+    executor = create_agent()
+    logger = StepLoggingHandler()
+
+    print(f"\n{'='*60}")
+    print(f"Query: {query}")
+    print(f"{'='*60}")
+    print("Reasoning steps:")
+
+    start = time.time()
+    result = executor.invoke(
+        {"input": query, "chat_history": chat_history},
+        config={"callbacks": [logger]},
+    )
+    latency = (time.time() - start) * 1000
+
+    print(f"\nFinal Answer: {result['output']}")
+    print(f"Total Steps: {logger.step_count} | Latency: {latency:.0f} ms")
+    print(f"{'='*60}")
+
+    return {
+        "output": result["output"],
+        "steps": logger.steps,
+        "latency_ms": latency,
+    }
