@@ -1,9 +1,9 @@
 """
-Cody AI Agent — Core ReAct Agent with multi-tool orchestration.
+Cody AI Agent — Core ReAct Agent with multi-tool orchestration and memory.
 
 This module defines the central agent that combines all available tools
 and uses a ReAct (Reasoning and Acting) approach to solve complex,
-multi-step problems.
+multi-step problems. Includes conversational memory for context retention.
 """
 
 import sys
@@ -14,6 +14,7 @@ from typing import Any
 from dotenv import load_dotenv
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.callbacks import BaseCallbackHandler
 
 load_dotenv()
@@ -48,6 +49,7 @@ RULES:
 - If a tool returns an error, try a different approach or inform the user.
 - Be concise but thorough in your final answers.
 - Show your reasoning when solving multi-step problems.
+- Use conversation history to resolve references like "it", "that", "its price", etc.
 """
 
 
@@ -72,7 +74,6 @@ class StepLoggingHandler(BaseCallbackHandler):
 
     def on_tool_end(self, output: str, **kwargs) -> None:
         """Called when a tool returns a result."""
-        # Truncate long outputs for cleaner logs.
         output_str = str(output)
         display_output = output_str[:200] + "..." if len(output_str) > 200 else output_str
         step = {
@@ -94,8 +95,84 @@ class StepLoggingHandler(BaseCallbackHandler):
         self.steps.append(step)
 
 
+class ChatSession:
+    """
+    Manages a conversation session with memory.
+
+    Stores the full history of human/AI messages so the agent can
+    resolve anaphores and maintain context across turns.
+    """
+
+    def __init__(self):
+        self.history = []  # List of HumanMessage / AIMessage objects.
+        self.executor = self._create_executor()
+
+    def _create_executor(self) -> AgentExecutor:
+        """Create the agent executor."""
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", SYSTEM_PROMPT),
+            ("placeholder", "{chat_history}"),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ])
+
+        agent = create_tool_calling_agent(chat_model, ALL_TOOLS, prompt)
+
+        return AgentExecutor(
+            agent=agent,
+            tools=ALL_TOOLS,
+            verbose=False,
+            max_iterations=10,
+            handle_parsing_errors=True,
+        )
+
+    def chat(self, message: str) -> dict:
+        """
+        Send a message and get a response, maintaining conversation history.
+
+        Args:
+            message: The user's message.
+
+        Returns:
+            dict with keys: output, steps, latency_ms
+        """
+        logger = StepLoggingHandler()
+
+        print(f"\n{'='*60}")
+        print(f"User: {message}")
+        print(f"{'='*60}")
+        print("Reasoning steps:")
+
+        start = time.time()
+        result = self.executor.invoke(
+            {"input": message, "chat_history": self.history},
+            config={"callbacks": [logger]},
+        )
+        latency = (time.time() - start) * 1000
+
+        # Store the exchange in memory.
+        self.history.append(HumanMessage(content=message))
+        self.history.append(AIMessage(content=result["output"]))
+
+        print(f"\nCody: {result['output']}")
+        print(f"Total Steps: {logger.step_count} | Latency: {latency:.0f} ms")
+        print(f"Memory: {len(self.history)} messages stored")
+        print(f"{'='*60}")
+
+        return {
+            "output": result["output"],
+            "steps": logger.steps,
+            "latency_ms": latency,
+        }
+
+    def clear(self):
+        """Clear conversation history."""
+        self.history = []
+        print("[Memory cleared]")
+
+
 def create_agent() -> AgentExecutor:
-    """Create and return the Cody agent executor with all tools and logging."""
+    """Create and return the Cody agent executor (stateless, no memory)."""
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
         ("placeholder", "{chat_history}"),
@@ -105,20 +182,19 @@ def create_agent() -> AgentExecutor:
 
     agent = create_tool_calling_agent(chat_model, ALL_TOOLS, prompt)
 
-    executor = AgentExecutor(
+    return AgentExecutor(
         agent=agent,
         tools=ALL_TOOLS,
-        verbose=False,  # We use our custom logger instead.
+        verbose=False,
         max_iterations=10,
         handle_parsing_errors=True,
     )
 
-    return executor
-
 
 def run_agent(query: str, chat_history: list = None) -> dict:
     """
-    Run the agent on a query and return the result with logging.
+    Run the agent on a single query (stateless). For multi-turn
+    conversations with memory, use ChatSession instead.
 
     Returns:
         dict with keys: output, steps, latency_ms
