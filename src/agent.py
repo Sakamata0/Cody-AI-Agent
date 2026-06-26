@@ -50,19 +50,30 @@ RULES:
 - Be concise but thorough in your final answers.
 - Show your reasoning when solving multi-step problems.
 - Use conversation history to resolve references like "it", "that", "its price", etc.
+- NEVER call the same tool with the same parameters more than once.
+- If after 3 tool calls you still don't have a satisfactory answer, provide your best answer with what you have. Do NOT keep retrying.
+- If a tool keeps failing, inform the user about the issue and give a partial answer.
 """
 
 
 class StepLoggingHandler(BaseCallbackHandler):
-    """Callback handler that logs each reasoning step (Thought/Action/Observation)."""
+    """Callback handler that logs each reasoning step and detects loops."""
 
     def __init__(self):
         self.steps = []
         self.step_count = 0
+        self.tool_calls = []  # Track (tool, input) to detect duplicates.
 
     def on_agent_action(self, action: Any, **kwargs) -> None:
         """Called when the agent decides to use a tool."""
         self.step_count += 1
+
+        # Detect duplicate tool calls (same tool + same input).
+        call_signature = (action.tool, str(action.tool_input))
+        if call_signature in self.tool_calls:
+            print(f"  [Step {self.step_count}] ⚠️  DUPLICATE CALL DETECTED: {action.tool}")
+        self.tool_calls.append(call_signature)
+
         step = {
             "step": self.step_count,
             "type": "action",
@@ -123,7 +134,9 @@ class ChatSession:
             tools=ALL_TOOLS,
             verbose=False,
             max_iterations=10,
+            max_execution_time=60,  # Hard timeout: 60 seconds max.
             handle_parsing_errors=True,
+            early_stopping_method="generate",  # Force LLM to produce a final answer when stopped.
         )
 
     def chat(self, message: str) -> dict:
@@ -187,7 +200,9 @@ def create_agent() -> AgentExecutor:
         tools=ALL_TOOLS,
         verbose=False,
         max_iterations=10,
+        max_execution_time=60,  # Hard timeout: 60 seconds max.
         handle_parsing_errors=True,
+        early_stopping_method="generate",  # Force LLM to produce a final answer when stopped.
     )
 
 
