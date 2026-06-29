@@ -28,7 +28,7 @@ def test_max_iterations():
     # The agent should answer with what it can find, not loop forever.
     assert result["output"], "Agent should produce a final answer"
     assert result["latency_ms"] < 60000, "Should complete within 60s timeout"
-    print("  ✅ Agent stopped and produced an answer within limits.")
+    print("Agent stopped and produced an answer within limits.")
     print()
 
 
@@ -42,7 +42,7 @@ def test_impossible_tool_query():
         "Query the database for the table 'unicorns' and get all unicorn names."
     )
     assert result["output"], "Agent should produce a final answer"
-    print("  ✅ Agent handled impossible query gracefully.")
+    print("Agent handled impossible query gracefully.")
     print()
 
 
