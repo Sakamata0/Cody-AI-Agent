@@ -71,7 +71,7 @@ class StepLoggingHandler(BaseCallbackHandler):
         # Detect duplicate tool calls (same tool + same input).
         call_signature = (action.tool, str(action.tool_input))
         if call_signature in self.tool_calls:
-            print(f"  [Step {self.step_count}] ⚠️  DUPLICATE CALL DETECTED: {action.tool}")
+            print(f"  [Step {self.step_count}] DUPLICATE CALL DETECTED: {action.tool}")
         self.tool_calls.append(call_signature)
 
         step = {
