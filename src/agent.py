@@ -115,10 +115,15 @@ class ChatSession:
 
     Stores the full history of human/AI messages so the agent can
     resolve anaphores and maintain context across turns.
+    When the history exceeds MAX_HISTORY_MESSAGES, older messages are
+    summarized to prevent context window overflow.
     """
+
+    MAX_HISTORY_MESSAGES = 20  # Summarize when history exceeds this count.
 
     def __init__(self):
         self.history = []  # List of HumanMessage / AIMessage objects.
+        self.summary = ""  # Summary of older conversations.
         self.executor = self._create_executor()
 
     def _create_executor(self) -> AgentExecutor:
@@ -137,10 +142,53 @@ class ChatSession:
             tools=ALL_TOOLS,
             verbose=False,
             max_iterations=10,
-            max_execution_time=60,  # Hard timeout: 60 seconds max.
+            max_execution_time=60,
             handle_parsing_errors=True,
-            early_stopping_method="generate",  # Force LLM to produce a final answer when stopped.
+            early_stopping_method="generate",
         )
+
+    def _summarize_history(self):
+        """
+        Summarize older messages when history exceeds the limit.
+        Keeps the last 6 messages intact and summarizes the rest.
+        """
+        if len(self.history) <= self.MAX_HISTORY_MESSAGES:
+            return
+
+        # Keep recent messages, summarize the rest.
+        messages_to_summarize = self.history[:-6]
+        self.history = self.history[-6:]
+
+        # Build a summary of the old messages.
+        conversation_text = ""
+        for msg in messages_to_summarize:
+            role = "User" if isinstance(msg, HumanMessage) else "Cody"
+            # Truncate long messages in the summary.
+            content = msg.content[:200] if len(msg.content) > 200 else msg.content
+            conversation_text += f"{role}: {content}\n"
+
+        # Ask the LLM to summarize.
+        summary_prompt = (
+            "Summarize the following conversation history in 2-3 sentences. "
+            "Keep key facts, names, and topics that might be referenced later:\n\n"
+            f"{conversation_text}"
+        )
+        summary_response = chat_model.invoke(summary_prompt)
+        new_summary = summary_response.content
+
+        # Prepend summary as context.
+        if self.summary:
+            self.summary = f"{self.summary}\n{new_summary}"
+        else:
+            self.summary = new_summary
+
+        # Insert summary as the first message in history.
+        self.history.insert(0, AIMessage(
+            content=f"[Previous conversation summary: {self.summary}]"
+        ))
+
+        print(f"  [Memory] Summarized {len(messages_to_summarize)} messages. "
+              f"History now: {len(self.history)} messages.")
 
     def chat(self, message: str) -> dict:
         """
@@ -169,6 +217,9 @@ class ChatSession:
         # Store the exchange in memory.
         self.history.append(HumanMessage(content=message))
         self.history.append(AIMessage(content=result["output"]))
+
+        # Summarize if history is getting too long.
+        self._summarize_history()
 
         print(f"\nCody: {result['output']}")
         print(f"Total Steps: {logger.step_count} | Latency: {latency:.0f} ms")
