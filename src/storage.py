@@ -89,8 +89,20 @@ def new_conversation_id() -> str:
 
 
 def generate_title(first_message: str) -> str:
-    """Generate a conversation title from the first user message."""
-    title = first_message.strip()[:50]
-    if len(first_message) > 50:
-        title += "..."
-    return title
+    """Generate a conversation title using the LLM for a formal summary."""
+    from src.llm import chat_model
+
+    try:
+        response = chat_model.invoke(
+            f"Generate a short, formal title (max 5 words) for a conversation that starts with this message. "
+            f"Return ONLY the title, nothing else. No quotes, no punctuation at the end.\n\n"
+            f"Message: {first_message}"
+        )
+        title = response.content.strip().strip('"').strip("'")[:50]
+        return title if title else first_message[:50]
+    except Exception:
+        # Fallback to simple truncation if LLM fails.
+        title = first_message.strip()[:50]
+        if len(first_message) > 50:
+            title += "..."
+        return title

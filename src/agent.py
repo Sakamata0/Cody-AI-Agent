@@ -24,6 +24,8 @@ from src.llm import chat_model
 from src.tools.web_search import web_search_tool
 from src.tools.database import sql_query_tool
 from src.tools.api import api_tools
+from src.token_tracker import token_tracker
+from src.token_cache import response_cache
 
 # All tools available to the agent.
 ALL_TOOLS = [web_search_tool, sql_query_tool] + api_tools
@@ -107,6 +109,17 @@ class StepLoggingHandler(BaseCallbackHandler):
             "output": finish.return_values.get("output", ""),
         }
         self.steps.append(step)
+
+    def on_llm_end(self, response: Any, **kwargs) -> None:
+        """Called after each LLM call — track token usage."""
+        try:
+            usage = response.generations[0][0].generation_info.get("usage", {})
+            input_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
+            if input_tokens or output_tokens:
+                token_tracker.add(input_tokens, output_tokens)
+        except (IndexError, AttributeError, KeyError):
+            pass
 
 
 class ChatSession:

@@ -174,8 +174,9 @@ with st.sidebar:
         for conv in conversations:
             col1, col2 = st.columns([5, 1])
             with col1:
+                display_title = conv['title'][:20] + "..." if len(conv['title']) > 20 else conv['title']
                 if st.button(
-                    f"💬 {conv['title'][:30]}",
+                    f"💬 {display_title}",
                     key=f"load_{conv['id']}",
                     use_container_width=True,
                 ):
