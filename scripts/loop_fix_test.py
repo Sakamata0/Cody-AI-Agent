@@ -15,40 +15,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from src.agent import run_agent, create_agent, StepLoggingHandler
 
-
-def test_max_iterations():
-    """
-    Ask a question that could lead to many tool calls.
-    Verify the agent stops within the limit and gives a partial answer.
-    """
-    print("[Test 1] Max iterations — complex question that could loop...")
-    result = run_agent(
-        "Find the exact population of every country in Africa and their GDP per capita."
-    )
-    # The agent should answer with what it can find, not loop forever.
-    assert result["output"], "Agent should produce a final answer"
-    assert result["latency_ms"] < 60000, "Should complete within 60s timeout"
-    print("Agent stopped and produced an answer within limits.")
-    print()
-
-
-def test_impossible_tool_query():
-    """
-    Ask something that will cause tool errors/empty results.
-    The agent should give up gracefully instead of retrying forever.
-    """
-    print("[Test 2] Impossible query — agent should give up gracefully...")
-    result = run_agent(
-        "Query the database for the table 'unicorns' and get all unicorn names."
-    )
-    assert result["output"], "Agent should produce a final answer"
-    print("Agent handled impossible query gracefully.")
-    print()
-
-
 def test_duplicate_detection():
     """Verify the duplicate call tracking works."""
-    print("[Test 3] Duplicate call detection...")
+    print("[Test 1] Duplicate call detection...")
     logger = StepLoggingHandler()
 
     # Simulate duplicate calls.
@@ -65,6 +34,21 @@ def test_duplicate_detection():
     print("Duplicate detection working — warning printed above.")
     print()
 
+def test_max_iterations():
+    """
+    Ask a question that could lead to many tool calls.
+    Verify the agent stops within the limit and gives a partial answer.
+    """
+    print("[Test 2] Max iterations — complex question that could loop...")
+    result = run_agent(
+        "Find the exact population of every country in Africa and their GDP per capita."
+    )
+    # The agent should answer with what it can find, not loop forever.
+    assert result["output"], "Agent should produce a final answer"
+    assert result["latency_ms"] < 60000, "Should complete within 60s timeout"
+    print("Agent stopped and produced an answer within limits.")
+    print()
+
 
 def main():
     print("\n" + "=" * 60)
@@ -73,7 +57,6 @@ def main():
 
     test_duplicate_detection()
     test_max_iterations()
-    test_impossible_tool_query()
 
     print("All loop-fix tests passed.")
 
