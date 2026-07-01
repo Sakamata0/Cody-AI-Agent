@@ -41,7 +41,7 @@ def database_query(question: str) -> str:
 
 # Tool that the agent can use to run SQL directly.
 sql_query_tool = QuerySQLDatabaseTool(db=db, name="sql_query", description=(
-    "Execute a SQL SELECT query against the company database and return results. "
+    "Execute a SQL SELECT query against the SMARTOVATE company database and return results. "
     "The database contains tables: departments (id, name, budget), "
     "employees (id, name, department_id, position, salary, hire_date, email), "
     "projects (id, name, department_id, status, start_date, deadline, budget). "
