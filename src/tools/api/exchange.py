@@ -6,23 +6,37 @@ API docs: https://www.frankfurter.app/docs/
 """
 
 import requests
+from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
 
-@tool
+class ExchangeRateInput(BaseModel):
+    """Input schema for the exchange rate tool."""
+    query: str = Field(
+        description="A currency conversion query string. Must be a plain string. "
+                    "Format: 'AMOUNT FROM to TO' or 'FROM to TO'. "
+                    "Examples: '100 USD to EUR', 'GBP to JPY', '50 EUR to TND'"
+    )
+
+
+@tool(args_schema=ExchangeRateInput)
 def exchange_rate_tool(query: str) -> str:
     """
     Get currency exchange rates or convert an amount between currencies.
     Use this tool when the user asks about exchange rates, currency conversion,
     or how much a currency is worth in another.
-    Input should be in the format: "USD to EUR" or "100 USD to EUR".
-    Supported currencies include: USD, EUR, GBP, JPY, TND, CAD, AUD, CHF, CNY, etc.
+
+    Input MUST be a plain string in one of these formats:
+      - "100 USD to EUR" (converts 100 USD to EUR)
+      - "USD to EUR" (gets the rate for 1 USD to EUR)
+      - "50 GBP to JPY" (converts 50 GBP to JPY)
+
+    Do NOT pass a dictionary or object. Only a plain query string.
+    Supported currencies: USD, EUR, GBP, JPY, TND, CAD, AUD, CHF, CNY, etc.
     """
     try:
-        # Parse the query to extract amount, source, and target currency.
         parts = query.upper().replace(",", "").split()
 
-        # Try to detect format: "100 USD to EUR" or "USD to EUR"
         amount = 1.0
         from_currency = ""
         to_currency = ""
@@ -30,14 +44,12 @@ def exchange_rate_tool(query: str) -> str:
         if parts[0].replace(".", "").isdigit():
             amount = float(parts[0])
             from_currency = parts[1]
-            # "to" keyword is at index 2
             to_currency = parts[3] if len(parts) > 3 else parts[-1]
         else:
             from_currency = parts[0]
             to_currency = parts[2] if len(parts) > 2 else parts[-1]
 
-        # Fetch exchange rate from Frankfurter API.
-        url = f"https://api.frankfurter.app/latest"
+        url = "https://api.frankfurter.app/latest"
         params = {"from": from_currency, "to": to_currency, "amount": amount}
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()

@@ -7,19 +7,34 @@ Fetches current weather data for a given city using:
 """
 
 import requests
+from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
 
-@tool
+class WeatherInput(BaseModel):
+    """Input schema for the weather tool."""
+    city: str = Field(
+        description="The name of the city to get weather for. Must be a single city name string. "
+                    "Examples: 'Paris', 'New York', 'Tokyo', 'Tunis'"
+    )
+
+
+@tool(args_schema=WeatherInput)
 def weather_tool(city: str) -> str:
     """
     Get the current weather for a city.
     Use this tool when the user asks about weather, temperature, or
     atmospheric conditions for a specific location.
-    Input should be a city name (e.g., "Paris", "New York", "Tokyo").
+
+    Input MUST be a single string with the city name.
+    Examples:
+      - "Paris"
+      - "New York"
+      - "Tokyo"
+
+    Do NOT pass a dictionary, list, or object. Only a plain city name string.
     """
     try:
-        # Step 1: Geocode city name to latitude/longitude.
         geo_url = "https://geocoding-api.open-meteo.com/v1/search"
         geo_response = requests.get(geo_url, params={"name": city, "count": 1}, timeout=10)
         geo_response.raise_for_status()
@@ -34,7 +49,6 @@ def weather_tool(city: str) -> str:
         resolved_name = location.get("name", city)
         country = location.get("country", "")
 
-        # Step 2: Fetch current weather using coordinates.
         weather_url = "https://api.open-meteo.com/v1/forecast"
         weather_params = {
             "latitude": lat,
@@ -52,7 +66,6 @@ def weather_tool(city: str) -> str:
         wind = current["wind_speed_10m"]
         code = current["weather_code"]
 
-        # Map weather codes to descriptions.
         weather_descriptions = {
             0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
             45: "Foggy", 48: "Depositing rime fog",

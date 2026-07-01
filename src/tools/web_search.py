@@ -20,6 +20,8 @@ web_search_tool = TavilySearchResults(
     description=(
         "Search the web for current information. Use this tool when you need "
         "recent news, real-time data, or information that may not be in your "
-        "training data. Input should be a search query string."
+        "training data. Input MUST be a plain search query string. "
+        "Examples: 'latest AI news 2025', 'Bitcoin price today', 'weather forecast Paris'. "
+        "Do NOT pass a dictionary or object. Only a plain query string."
     ),
 )

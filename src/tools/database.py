@@ -45,5 +45,10 @@ sql_query_tool = QuerySQLDatabaseTool(db=db, name="sql_query", description=(
     "The database contains tables: departments (id, name, budget), "
     "employees (id, name, department_id, position, salary, hire_date, email), "
     "projects (id, name, department_id, status, start_date, deadline, budget). "
-    "Input must be a valid SQL SELECT query."
+    "Input MUST be a valid SQL SELECT query as a plain string. "
+    "Examples: "
+    "'SELECT COUNT(*) FROM employees', "
+    "'SELECT name, salary FROM employees WHERE department_id = 1', "
+    "'SELECT * FROM projects WHERE status = \"in_progress\"'. "
+    "Do NOT pass a dictionary or object. Only a plain SQL string."
 ))
