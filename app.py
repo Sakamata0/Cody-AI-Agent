@@ -317,8 +317,11 @@ else:
                                     obs = step["output"][:300]
                                     st.markdown(f"**Observation:** {obs}")
                 if msg.get("latency_ms"):
+                    tokens_text = ""
+                    if msg.get("tokens"):
+                        tokens_text = f" • Tokens: {msg['tokens']}"
                     st.markdown(
-                        f"<span style='color: #888; font-size: 0.8rem;'>Elapsed time: {format_latency(msg['latency_ms'])}</span>",
+                        f"<span style='color: #888; font-size: 0.8rem;'>Elapsed time: {format_latency(msg['latency_ms'])}{tokens_text}</span>",
                         unsafe_allow_html=True,
                     )
         else:
@@ -400,11 +403,21 @@ if st.session_state.get("pending_prompt"):
         if tool_steps:
             st.caption(f"⏱️ {latency:.0f}ms | {ui_logger.step_count} steps")
 
+    # Extract token usage from the result metadata if available.
+    tokens_used = 0
+    try:
+        # LangChain sometimes includes usage in the response metadata.
+        if hasattr(result, 'get') and result.get('__metadata'):
+            tokens_used = result['__metadata'].get('total_tokens', 0)
+    except (AttributeError, KeyError, TypeError):
+        pass
+
     st.session_state.messages.append({
         "role": "assistant",
         "content": result["output"],
         "steps": ui_logger.steps,
         "latency_ms": latency,
+        "tokens": tokens_used if tokens_used else None,
     })
 
     save_current_chat()
