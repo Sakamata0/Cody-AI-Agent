@@ -368,6 +368,7 @@ if st.session_state.get("pending_prompt"):
                         "sql_query": "🗄️ Querying database...",
                         "weather_tool": "🌤️ Checking weather...",
                         "exchange_rate_tool": "💱 Converting currency...",
+                        "code_executor_tool": "💻 Executing code...",
                     }
                     label = tool_labels.get(action.tool, f"⚙️ Using {action.tool}...")
                     status.update(label=label)
