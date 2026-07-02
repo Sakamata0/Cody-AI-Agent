@@ -361,6 +361,10 @@ if st.session_state.get("pending_prompt"):
 
             # Custom callback that writes to the status widget in real time.
             class StreamlitStepLogger(StepLoggingHandler):
+                def __init__(self):
+                    super().__init__()
+                    self.step_placeholders = []
+
                 def on_agent_action(self, action, **kwargs):
                     super().on_agent_action(action, **kwargs)
                     tool_labels = {
@@ -371,13 +375,24 @@ if st.session_state.get("pending_prompt"):
                         "code_executor_tool": "💻 Executing code...",
                     }
                     label = tool_labels.get(action.tool, f"⚙️ Using {action.tool}...")
-                    status.update(label=label)
-                    st.write(f"**{label}**")
+                    status.update(label=label, expanded=True)
+                    # Mark previous step as done.
+                    if self.step_placeholders:
+                        prev = self.step_placeholders[-1]
+                        prev_text = prev["text"]
+                        prev["placeholder"].markdown(f"✅ {prev_text}")
+                    # Add new step as in-progress.
+                    placeholder = st.empty()
+                    placeholder.markdown(f"⏳ {label}")
+                    self.step_placeholders.append({"placeholder": placeholder, "text": label})
 
                 def on_tool_end(self, output, **kwargs):
                     super().on_tool_end(output, **kwargs)
-                    output_str = str(output)[:200]
-                    st.caption(f"Result: {output_str}")
+                    # Mark current step as done.
+                    if self.step_placeholders:
+                        current = self.step_placeholders[-1]
+                        done_label = current["text"].replace("...", "")
+                        current["placeholder"].markdown(f"✅ {done_label} ✓")
 
             ui_logger = StreamlitStepLogger()
 
