@@ -132,7 +132,7 @@ class ChatSession:
     summarized to prevent context window overflow.
     """
 
-    MAX_HISTORY_MESSAGES = 20  # Summarize when history exceeds this count.
+    MAX_HISTORY_MESSAGES = 40  # Summarize when history exceeds this count.
 
     def __init__(self):
         self.history = []  # List of HumanMessage / AIMessage objects.
@@ -169,8 +169,8 @@ class ChatSession:
             return
 
         # Keep recent messages, summarize the rest.
-        messages_to_summarize = self.history[:-6]
-        self.history = self.history[-6:]
+        messages_to_summarize = self.history[:-20]
+        self.history = self.history[-20:]
 
         # Build a summary of the old messages.
         conversation_text = ""

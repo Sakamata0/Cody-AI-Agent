@@ -348,7 +348,7 @@ if st.session_state.get("pending_prompt"):
 
     with st.chat_message("assistant", avatar="assets/cody.png"):
         # Use st.status for real-time step display.
-        status_container = st.status("Cody is thinking...", expanded=True)
+        status_container = st.status("Cody is thinking...", expanded=False)
         with status_container as status:
             chat_history = []
             for msg in st.session_state.messages[:-1]:
