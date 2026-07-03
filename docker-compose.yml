@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  api:
+    build: .
+    container_name: cody-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  ui:
+    build: .
+    container_name: cody-ui
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    restart: unless-stopped
