@@ -44,9 +44,12 @@ def _predict_tornado(state_code: str) -> str:
     if model is None:
         return f"No tornado model available for {state_code}."
 
-    future = model.make_future_dataframe(periods=12, freq="MS")
+    future = model.make_future_dataframe(periods=36, freq="MS")
     forecast = model.predict(future)
-    future_forecast = forecast.tail(12)
+
+    # Filter to next 12 months from today.
+    now = pd.Timestamp(datetime.now().replace(day=1))
+    future_forecast = forecast[forecast["ds"] >= now].head(12)
 
     state_label = state_code if state_code != "US" else "United States (national)"
     result = f"🌪️ Tornado Risk Forecast — {state_label}\n"
@@ -84,29 +87,34 @@ def _predict_earthquake_japan() -> str:
     if model_count is None:
         return "No earthquake model available for Japan."
 
-    # Forecast count.
-    future = model_count.make_future_dataframe(periods=12, freq="MS")
-    forecast_count = model_count.predict(future).tail(12)
+    # Forecast count — extend far enough to cover current year.
+    future = model_count.make_future_dataframe(periods=36, freq="MS")
+    forecast_count = model_count.predict(future)
+
+    # Filter to show next 12 months from today.
+    now = pd.Timestamp(datetime.now().replace(day=1))
+    future_months = forecast_count[forecast_count["ds"] >= now].head(12)
 
     # Forecast max magnitude.
     mag_forecast = None
     if model_mag:
-        future_mag = model_mag.make_future_dataframe(periods=12, freq="MS")
-        mag_forecast = model_mag.predict(future_mag).tail(12)
+        future_mag = model_mag.make_future_dataframe(periods=36, freq="MS")
+        mag_all = model_mag.predict(future_mag)
+        mag_forecast = mag_all[mag_all["ds"] >= now].head(12)
 
     result = "🌍 Earthquake Risk Forecast — Japan\n"
     result += "Model: Prophet | Data: USGS 1950-2024 (17,022 events, mag 4.5+)\n\n"
     result += "Month          | Predicted Events | Expected Max Mag | Risk Level\n"
     result += "---------------|-----------------|-----------------|----------\n"
 
-    for i, (_, row) in enumerate(forecast_count.iterrows()):
+    for i, (_, row) in enumerate(future_months.iterrows()):
         month_str = row["ds"].strftime("%B %Y")
         predicted = max(0, round(row["yhat"], 1))
         lower = max(0, round(row["yhat_lower"], 1))
         upper = max(0, round(row["yhat_upper"], 1))
 
         max_mag = "—"
-        if mag_forecast is not None:
+        if mag_forecast is not None and i < len(mag_forecast):
             mag_row = mag_forecast.iloc[i]
             max_mag = f"{mag_row['yhat']:.1f}"
 
@@ -121,7 +129,7 @@ def _predict_earthquake_japan() -> str:
 
         result += f"{month_str:<15}| {predicted:>5} ({lower}-{upper}) | {max_mag:>8} | {risk}\n"
 
-    peak = forecast_count.loc[forecast_count["yhat"].idxmax()]
+    peak = future_months.loc[future_months["yhat"].idxmax()]
     result += f"\nPeak seismic activity: {peak['ds'].strftime('%B %Y')} (~{max(0, round(peak['yhat']))} events)"
     return result
 
