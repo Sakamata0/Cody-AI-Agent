@@ -373,6 +373,7 @@ if st.session_state.get("pending_prompt"):
                         "weather_tool": "🌤️ Checking weather...",
                         "exchange_rate_tool": "💱 Converting currency...",
                         "code_executor_tool": "💻 Executing code...",
+                        "disaster_predictor_tool": "🌪️ Analyzing disaster risk...",
                     }
                     label = tool_labels.get(action.tool, f"⚙️ Using {action.tool}...")
                     status.update(label=label, expanded=True)

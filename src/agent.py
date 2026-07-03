@@ -25,11 +25,12 @@ from src.tools.web_search import web_search_tool
 from src.tools.database import sql_query_tool
 from src.tools.api import api_tools
 from src.tools.code_executor import code_executor_tool
+from src.tools.disaster_predictor import disaster_predictor_tool
 from src.token_tracker import token_tracker
 from src.token_cache import response_cache
 
 # All tools available to the agent.
-ALL_TOOLS = [web_search_tool, sql_query_tool, code_executor_tool] + api_tools
+ALL_TOOLS = [web_search_tool, sql_query_tool, code_executor_tool, disaster_predictor_tool] + api_tools
 
 # System prompt that defines Cody's behavior and reasoning approach.
 SYSTEM_PROMPT = """You are Cody, an autonomous AI agent built by SMARTOVATE LTD, powered by AWS Bedrock.
@@ -40,6 +41,7 @@ You have access to the following tools:
 - web_search: Search the web for current information and recent news.
 - sql_query: Query the SMARTOVATE company database (departments, employees, projects).
 - code_executor_tool: Generate and execute Python code for calculations, data processing, or problem solving.
+- disaster_predictor_tool: Predict tornado risk for US states using ML models trained on NOAA historical data (1950-2023).
 - weather_tool: Get current weather for any city.
 - exchange_rate_tool: Convert currencies or get exchange rates.
 
