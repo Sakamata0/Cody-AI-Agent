@@ -1,8 +1,8 @@
 """
-Conversation storage — persists chat sessions as JSON files.
+Conversation storage — persists chat sessions to AWS S3.
 
-Each conversation is saved as a JSON file in data/conversations/.
-This can be swapped to S3 in production by changing save/load functions.
+Conversations are stored as JSON files per user:
+  s3://s3-cody-bucket/conversations/{user_id}/{conversation_id}.json
 """
 
 import json
@@ -10,77 +10,88 @@ import os
 import uuid
 from datetime import datetime
 
-CONVERSATIONS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "data", "conversations"
-)
+import boto3
+from botocore.exceptions import ClientError
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "s3-cody-bucket")
+REGION = os.getenv("AWS_REGION", "eu-north-1")
+PREFIX = "conversations"
+
+s3 = boto3.client("s3", region_name=REGION)
 
 
-def _ensure_dir():
-    """Create the conversations directory if it doesn't exist."""
-    os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
+def _key(user_id: str, conversation_id: str) -> str:
+    """Build the S3 object key."""
+    return f"{PREFIX}/{user_id}/{conversation_id}.json"
 
 
-def list_conversations() -> list[dict]:
+def list_conversations(user_id: str) -> list[dict]:
     """
-    List all saved conversations, sorted by last updated (newest first).
-
-    Returns:
-        List of dicts with: id, title, updated_at, message_count
+    List all saved conversations for a user, sorted by last updated (newest first).
     """
-    _ensure_dir()
+    try:
+        response = s3.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=f"{PREFIX}/{user_id}/",
+        )
+    except ClientError:
+        return []
+
+    if "Contents" not in response:
+        return []
+
     conversations = []
-
-    for filename in os.listdir(CONVERSATIONS_DIR):
-        if not filename.endswith(".json"):
-            continue
-        filepath = os.path.join(CONVERSATIONS_DIR, filename)
+    for obj in response["Contents"]:
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            conversations.append({
-                "id": data["id"],
-                "title": data.get("title", "Untitled"),
-                "updated_at": data.get("updated_at", ""),
-                "message_count": len(data.get("messages", [])),
-            })
-        except (json.JSONDecodeError, KeyError):
+            data = _get_object(obj["Key"])
+            if data:
+                conversations.append({
+                    "id": data["id"],
+                    "title": data.get("title", "Untitled"),
+                    "updated_at": data.get("updated_at", ""),
+                    "message_count": len(data.get("messages", [])),
+                })
+        except (ClientError, json.JSONDecodeError, KeyError):
             continue
 
     conversations.sort(key=lambda x: x["updated_at"], reverse=True)
     return conversations
 
 
-def load_conversation(conversation_id: str) -> dict | None:
+def load_conversation(user_id: str, conversation_id: str) -> dict | None:
     """Load a conversation by ID."""
-    _ensure_dir()
-    filepath = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.json")
-    if not os.path.exists(filepath):
-        return None
-    with open(filepath, "r", encoding="utf-8") as f:
-        return json.load(f)
+    key = _key(user_id, conversation_id)
+    return _get_object(key)
 
 
-def save_conversation(conversation_id: str, title: str, messages: list) -> None:
-    """Save a conversation to disk."""
-    _ensure_dir()
-    filepath = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.json")
+def save_conversation(user_id: str, conversation_id: str, title: str, messages: list) -> None:
+    """Save a conversation to S3."""
+    key = _key(user_id, conversation_id)
     data = {
         "id": conversation_id,
         "title": title,
         "updated_at": datetime.now().isoformat(),
         "messages": messages,
     }
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=key,
+        Body=json.dumps(data, ensure_ascii=False, indent=2),
+        ContentType="application/json",
+    )
 
 
-def delete_conversation(conversation_id: str) -> bool:
-    """Delete a conversation file. Returns True if deleted."""
-    filepath = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.json")
-    if os.path.exists(filepath):
-        os.remove(filepath)
+def delete_conversation(user_id: str, conversation_id: str) -> bool:
+    """Delete a conversation. Returns True if deleted."""
+    key = _key(user_id, conversation_id)
+    try:
+        s3.delete_object(Bucket=BUCKET_NAME, Key=key)
         return True
-    return False
+    except ClientError:
+        return False
 
 
 def new_conversation_id() -> str:
@@ -101,8 +112,17 @@ def generate_title(first_message: str) -> str:
         title = response.content.strip().strip('"').strip("'")[:50]
         return title if title else first_message[:50]
     except Exception:
-        # Fallback to simple truncation if LLM fails.
         title = first_message.strip()[:50]
         if len(first_message) > 50:
             title += "..."
         return title
+
+
+def _get_object(key: str) -> dict | None:
+    """Fetch and parse a JSON object from S3."""
+    try:
+        response = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        body = response["Body"].read().decode("utf-8")
+        return json.loads(body)
+    except (ClientError, json.JSONDecodeError):
+        return None

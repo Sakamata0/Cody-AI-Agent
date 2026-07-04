@@ -19,6 +19,10 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 from src.agent import create_agent, StepLoggingHandler, ALL_TOOLS
 from src.llm import MODEL_ID, REGION
+from src.storage import (
+    list_conversations, load_conversation, save_conversation,
+    delete_conversation, new_conversation_id, generate_title,
+)
 
 # --- App Setup ---
 app = FastAPI(
@@ -44,6 +48,7 @@ sessions: dict[str, list] = {}
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -91,11 +96,13 @@ def chat(request: ChatRequest):
     """
     Send a message to Cody and get a response.
 
-    If session_id is provided, conversation history is maintained.
-    If not, a new session is created.
+    - user_id: identifies the user (stored in frontend localStorage)
+    - session_id: identifies the conversation (for multi-turn memory)
     """
-    # Manage session.
-    session_id = request.session_id or f"session_{int(time.time())}"
+    user_id = request.user_id or "anonymous"
+    session_id = request.session_id or new_conversation_id()
+
+    # Load or create session.
     if session_id not in sessions:
         sessions[session_id] = []
 
@@ -116,9 +123,24 @@ def chat(request: ChatRequest):
 
     latency = (time.time() - start) * 1000
 
-    # Update session history.
+    # Update in-memory session.
     sessions[session_id].append(HumanMessage(content=request.message))
     sessions[session_id].append(AIMessage(content=result["output"]))
+
+    # Persist to S3.
+    messages_to_save = []
+    for msg in sessions[session_id]:
+        role = "user" if isinstance(msg, HumanMessage) else "assistant"
+        messages_to_save.append({"role": role, "content": msg.content})
+
+    title = generate_title(messages_to_save[0]["content"]) if len(messages_to_save) == 2 else None
+    if title:
+        save_conversation(user_id, session_id, title, messages_to_save)
+    else:
+        # Load existing title.
+        existing = load_conversation(user_id, session_id)
+        t = existing["title"] if existing else "Chat"
+        save_conversation(user_id, session_id, t, messages_to_save)
 
     return ChatResponse(
         response=result["output"],
@@ -126,6 +148,30 @@ def chat(request: ChatRequest):
         steps=logger.steps,
         latency_ms=round(latency, 0),
     )
+
+
+@app.get("/conversations/{user_id}")
+def get_conversations(user_id: str):
+    """List all conversations for a user."""
+    return list_conversations(user_id)
+
+
+@app.get("/conversations/{user_id}/{conversation_id}")
+def get_conversation(user_id: str, conversation_id: str):
+    """Load a specific conversation."""
+    data = load_conversation(user_id, conversation_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return data
+
+
+@app.delete("/conversations/{user_id}/{conversation_id}")
+def remove_conversation(user_id: str, conversation_id: str):
+    """Delete a conversation."""
+    deleted = delete_conversation(user_id, conversation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"message": "Deleted."}
 
 
 @app.delete("/sessions/{session_id}")
