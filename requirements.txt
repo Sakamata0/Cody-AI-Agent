@@ -5,7 +5,10 @@ langchain-community==0.3.25
 tavily-python==0.5.0
 python-dotenv==1.1.0
 Faker==37.1.0
-streamlit==1.58.0
-fastapi==0.115.0
+streamlit>=1.45.0
+fastapi>=0.115.0
 uvicorn==0.34.0
 prophet==1.1.6
+PyJWT==2.9.0
+cryptography==44.0.0
+httpx==0.28.0
