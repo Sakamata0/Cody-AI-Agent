@@ -51,7 +51,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "http://16.16.210.236:3000",
+        "http://16.192.58.80:3000",
+        "https://cody.formaa.studio",
         os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000"),
     ],
     allow_credentials=True,
