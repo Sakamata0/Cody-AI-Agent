@@ -23,13 +23,13 @@ def _default_settings(user_id: str) -> UserSettings:
     Build default settings when no persisted settings exist.
 
     Default values:
-    - display_name: first 8 chars of user_id (since we only have sub, not email)
+    - display_name: "User" (safe default that passes validation)
     - avatar_index: null (shows initials)
     - theme: "dark"
     - language: "en"
     """
     return UserSettings(
-        display_name=user_id[:8],
+        display_name="User",
         avatar_index=None,
         theme="dark",
         language="en",
