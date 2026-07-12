@@ -111,10 +111,10 @@ def _ensure_user_exists(email: str):
     """Create user in Cognito if they don't exist (for first-time OTP login)."""
     cognito = _get_cognito_client()
     client_id = _get_client_id()
-    user_pool_id = _get_user_pool_id()
 
     try:
         # Try to sign up with a random password (user won't need it — OTP only)
+        # The Pre Sign-Up Lambda auto-confirms the user
         import secrets
         temp_password = f"Tmp{secrets.token_urlsafe(16)}!1"
         cognito.sign_up(
@@ -122,11 +122,6 @@ def _ensure_user_exists(email: str):
             Username=email,
             Password=temp_password,
             UserAttributes=[{"Name": "email", "Value": email}],
-        )
-        # Auto-confirm the user so they can use custom auth immediately
-        cognito.admin_confirm_sign_up(
-            UserPoolId=user_pool_id,
-            Username=email,
         )
         print(f"[AUTH] Created new user: {email}")
     except Exception as e:
