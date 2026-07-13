@@ -1,8 +1,7 @@
 """
 Usage tracking — weekly message limits per user.
 
-Storage: local JSON files at data/usage/{user_id}.json
-(with S3 fallback when available)
+Storage: S3 at s3://s3-cody-bucket/usage/{user_id}.json
 
 Each user's usage file:
 {
@@ -18,6 +17,8 @@ import json
 import os
 from datetime import datetime, timedelta
 
+import boto3
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -27,15 +28,15 @@ router = APIRouter()
 
 # Default weekly limit per user
 DEFAULT_WEEKLY_LIMIT = 50
+USAGE_PREFIX = "usage"
 
-# Local storage for usage data
-_USAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "usage")
-os.makedirs(_USAGE_DIR, exist_ok=True)
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "s3-cody-bucket")
+REGION = os.getenv("AWS_REGION", "eu-north-1")
+s3 = boto3.client("s3", region_name=REGION)
 
 
-def _usage_path(user_id: str) -> str:
-    safe_id = "".join(c for c in user_id if c.isalnum() or c in "-_")
-    return os.path.join(_USAGE_DIR, f"{safe_id}.json")
+def _usage_key(user_id: str) -> str:
+    return f"{USAGE_PREFIX}/{user_id}.json"
 
 
 def _get_week_start() -> datetime:
@@ -51,28 +52,28 @@ def _get_week_end() -> datetime:
 
 
 def _load_usage(user_id: str) -> dict:
-    """Load usage data for a user. Resets if week has passed."""
-    path = _usage_path(user_id)
+    """Load usage data for a user from S3. Resets if week has passed."""
+    key = _usage_key(user_id)
     week_start = _get_week_start()
 
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.loads(f.read())
+    try:
+        response = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        body = response["Body"].read().decode("utf-8")
+        data = json.loads(body)
 
-            # Check if we need to reset (new week)
-            stored_week = datetime.fromisoformat(data.get("week_start", ""))
-            if stored_week < week_start:
-                # New week — reset
-                data = {
-                    "messages_used": 0,
-                    "week_start": week_start.isoformat(),
-                    "messages_limit": data.get("messages_limit", DEFAULT_WEEKLY_LIMIT),
-                }
-                _save_usage(user_id, data)
-            return data
-        except (json.JSONDecodeError, OSError, ValueError):
-            pass
+        # Check if we need to reset (new week)
+        stored_week = datetime.fromisoformat(data.get("week_start", ""))
+        if stored_week < week_start:
+            # New week — reset
+            data = {
+                "messages_used": 0,
+                "week_start": week_start.isoformat(),
+                "messages_limit": data.get("messages_limit", DEFAULT_WEEKLY_LIMIT),
+            }
+            _save_usage(user_id, data)
+        return data
+    except (ClientError, json.JSONDecodeError, ValueError):
+        pass
 
     # No file or corrupted — create fresh
     data = {
@@ -85,10 +86,14 @@ def _load_usage(user_id: str) -> dict:
 
 
 def _save_usage(user_id: str, data: dict) -> None:
-    """Persist usage data locally."""
-    path = _usage_path(user_id)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(json.dumps(data, indent=2))
+    """Persist usage data to S3."""
+    key = _usage_key(user_id)
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=key,
+        Body=json.dumps(data, indent=2),
+        ContentType="application/json",
+    )
 
 
 def increment_usage(user_id: str) -> bool:
