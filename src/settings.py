@@ -84,7 +84,7 @@ async def update_settings(
     # Load existing settings or defaults
     existing_data = load_settings(user_id)
     if existing_data is None:
-        current = _default_settings(user_id)
+        current = _default_settings()
     else:
         current = UserSettings(**existing_data)
 
