@@ -33,6 +33,6 @@ chat_model = ChatBedrockConverse(
     model=MODEL_ID,
     region_name=REGION,
     temperature=0.2,
-    max_tokens=1024,
+    max_tokens=4096,
     config=bedrock_config,
 )
