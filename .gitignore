@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 *.db
 data/conversations/
+data/conversations_local/
+data/settings/
+data/usage/
+tests/
