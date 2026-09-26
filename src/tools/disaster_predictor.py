@@ -17,8 +17,20 @@ from datetime import datetime
 from typing import Optional
 
 import pandas as pd
+from prophet import Prophet
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
+
+# Compatibility patch for Prophet with Pandas 2.2+ (prevents duplicate index reindex errors)
+def _safe_add_group_component(self, components, name, group):
+    new_comp = components[components['component'].isin(set(group))].copy()
+    group_cols = new_comp['col'].unique()
+    if len(group_cols) > 0:
+        new_comp = pd.DataFrame({'col': group_cols, 'component': name})
+        components = pd.concat([components, new_comp], ignore_index=True)
+    return components
+
+Prophet.add_group_component = _safe_add_group_component
 
 MODELS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),

@@ -21,12 +21,50 @@ from src.storage import load_settings, save_settings
 router = APIRouter()
 
 
-def _extract_display_name_from_email(email: str) -> str:
+def _extract_display_name_from_email(email: str | None) -> str:
     """Extract a clean display name from email prefix. Removes numbers and special chars."""
+    if not email:
+        return "User"
     prefix = email.split("@")[0] if "@" in email else email
     # Remove numbers, dots, underscores, hyphens — keep only letters
     clean = re.sub(r"[^a-zA-ZÀ-ÿ]", "", prefix)
-    return clean[:50] if len(clean) >= 2 else "User"
+    if len(clean) >= 1:
+        return clean.capitalize()[:50]
+    return "User"
+
+
+def _get_user_email(user_id: str, credentials: HTTPAuthorizationCredentials | None) -> str | None:
+    """Resolve the user's email from the JWT claims or directly from Cognito."""
+    if credentials:
+        try:
+            import jwt as pyjwt
+            unverified = pyjwt.decode(
+                credentials.credentials,
+                options={"verify_signature": False},
+            )
+            if unverified.get("email") and "@" in unverified["email"]:
+                return unverified["email"]
+            username = unverified.get("username", "")
+            if "@" in username:
+                return username
+            cognito_user = unverified.get("cognito:username", "")
+            if "@" in cognito_user:
+                return cognito_user
+        except Exception:
+            pass
+
+    # Fallback to Cognito AdminGetUser API
+    try:
+        from src.auth import _get_cognito_client, _get_user_pool_id
+        cognito = _get_cognito_client()
+        pool_id = _get_user_pool_id()
+        user_info = cognito.admin_get_user(UserPoolId=pool_id, Username=user_id)
+        for attr in user_info.get("UserAttributes", []):
+            if attr.get("Name") == "email":
+                return attr.get("Value")
+    except Exception:
+        pass
+    return None
 
 
 def _default_settings(display_name: str = "User") -> UserSettings:
@@ -51,21 +89,12 @@ async def get_settings(
     Returns default settings if no settings file exists for this user.
     """
     data = load_settings(user_id)
-    if data is None:
-        # Try to extract email from token for a better default name
-        display_name = "User"
-        if credentials:
-            try:
-                import jwt as pyjwt
-                unverified = pyjwt.decode(
-                    credentials.credentials,
-                    options={"verify_signature": False},
-                )
-                username = unverified.get("username", "")
-                if "@" in username:
-                    display_name = _extract_display_name_from_email(username)
-            except Exception:
-                pass
+    if data is None or data.get("display_name") == "User":
+        email = _get_user_email(user_id, credentials)
+        display_name = _extract_display_name_from_email(email)
+        if data is not None:
+            data["display_name"] = display_name
+            return UserSettings(**data)
         return _default_settings(display_name)
     return UserSettings(**data)
 

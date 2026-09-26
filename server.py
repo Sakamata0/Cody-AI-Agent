@@ -46,15 +46,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS — restrict origins to known frontends.
+# CORS — restrict origins to known frontends and amplify domains.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://16.192.110.121:3000",
         "https://cody.formaa.studio",
+        "https://askcody.formaa.studio",
         os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000"),
     ],
+    allow_origin_regex=r"https://.*\.amplifyapp\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
